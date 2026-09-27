@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A local-first wiring planner for the L61 engine, uaEFI, and a 32-pin round firewall connector."
+    />
+    <title>L61 Wiring Bench</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true">WB</div>
+        <div>
+          <p class="eyebrow">L61 / uaEFI</p>
+          <h1 id="project-title" title="Click to rename project">Wiring Bench</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span class="save-state" id="save-state">Saved locally</span>
+        <button class="button button-ghost" id="export-button" type="button">Export</button>
+        <button class="button button-ghost" id="import-button" type="button">Import</button>
+        <input id="import-input" type="file" accept="application/json,.json" hidden />
+        <button class="button button-primary" id="add-button" type="button">+ Add circuit</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="summary" aria-label="Project summary">
+        <div class="summary-copy">
+          <p class="eyebrow">2006 HHR 2.2 L61 &middot; Gen 1 &middot; Batch fire &middot; Wasted spark</p>
+          <h2>Firewall routing board</h2>
+          <p>Drag a terminal to a bulkhead cavity, or select a circuit and then click a cavity.</p>
+        </div>
+        <div class="metrics" id="metrics"></div>
+      </section>
+
+      <aside class="safety-note">
+        <span class="safety-icon" aria-hidden="true">!</span>
+        <div>
+          <strong>Planning data, not a verified pinout.</strong>
+          Confirm uaEFI cavities, GM connector views, bulkhead numbering, current ratings, and every wire by continuity test before energizing the harness.
+        </div>
+        <button class="text-button" id="dismiss-note" type="button">Dismiss</button>
+      </aside>
+
+      <section class="controls" aria-label="Board controls">
+        <label class="search-field">
+          <span aria-hidden="true">&#8981;</span>
+          <input id="search-input" type="search" placeholder="Search circuits, pins, notes..." />
+        </label>
+        <div class="filter-group" role="group" aria-label="Filter circuits">
+          <button class="filter-button active" data-filter="all" type="button">All</button>
+          <button class="filter-button" data-filter="open" type="button">Open</button>
+          <button class="filter-button" data-filter="complete" type="button">Checked</button>
+          <button class="filter-button" data-filter="unassigned" type="button">Unassigned</button>
+        </div>
+        <button class="button button-ghost compact" id="checklist-button" type="button">Checklist</button>
+        <button class="button button-ghost compact" id="reset-view-button" type="button">Show all</button>
+      </section>
+
+      <div class="selection-banner" id="selection-banner" hidden>
+        <span id="selection-copy"></span>
+        <button class="text-button" id="cancel-selection" type="button">Cancel</button>
+      </div>
+
+      <section class="board-shell" aria-label="Interactive wiring board">
+        <div class="board-scroller" id="board-scroller">
+          <div class="board" id="board">
+            <svg class="wire-layer" id="wire-layer" aria-hidden="true">
+              <g id="wire-paths"></g>
+              <path id="drag-path" class="drag-path" d="" hidden></path>
+            </svg>
+
+            <section class="board-column source-column">
+              <div class="column-heading">
+                <div>
+                  <p class="eyebrow">Interior side</p>
+                  <h3>uaEFI Molex / cabin</h3>
+                </div>
+                <span class="column-count" id="source-count"></span>
+              </div>
+              <a class="pinout-source" href="https://rusefi.com/docs/pinouts/hellen/uaefi/" target="_blank" rel="noreferrer">
+                Official uaEFI pinout
+              </a>
+              <div class="route-list" id="source-list"></div>
+            </section>
+
+            <section class="connector-column">
+              <div class="column-heading connector-heading">
+                <div>
+                  <p class="eyebrow">Firewall disconnect</p>
+                  <h3 id="connector-title">Round bulkhead &middot; 32 position</h3>
+                </div>
+              </div>
+              <div class="connector-key">
+                <span><i class="key-dot assigned"></i>Assigned</span>
+                <span><i class="key-dot empty"></i>Spare</span>
+                <span><i class="key-dot large"></i>Large 1-4</span>
+              </div>
+              <div class="connector-body">
+                <img class="connector-map-image" src="32_pinout_labeled.png" alt="Labeled panel receptacle face for the 32-pin round connector" />
+                <div class="pin-grid" id="pin-grid"></div>
+              </div>
+              <a class="connector-map-link" href="32_pinout_labeled.png" target="_blank">Panel receptacle face &middot; key at top &middot; open full size</a>
+              <div class="connector-alert" id="connector-alert"></div>
+              <button class="button button-ghost compact clear-pin" id="clear-pin-button" type="button" disabled>
+                Clear selected pin
+              </button>
+            </section>
+
+            <section class="board-column engine-column">
+              <div class="column-heading">
+                <div>
+                  <p class="eyebrow">Engine side</p>
+                  <h3>L61 harness</h3>
+                </div>
+                <span class="column-count" id="engine-count"></span>
+              </div>
+              <div class="route-list" id="engine-list"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="cabin-panel" aria-labelledby="cabin-panel-title">
+        <div class="cabin-panel-heading">
+          <div>
+            <p class="eyebrow">Drive-by-wire system</p>
+            <h2 id="cabin-panel-title">APP and throttle routing</h2>
+            <p>The B107 pedal connects directly to uaEFI inside the cabin. The throttle actuator uses the engine-side firewall routes shown above.</p>
+          </div>
+          <span class="column-count" id="cabin-count"></span>
+        </div>
+        <div class="cabin-layout">
+          <figure class="pedal-reference">
+            <a href="APP_diagram.png" target="_blank" title="Open full-size accelerator pedal diagram">
+              <img src="APP_diagram.png" alt="B107 accelerator pedal position sensor connector diagram and pin table" />
+            </a>
+            <figcaption>
+              B107 &middot; OEM 13835162 &middot; Service 13577043
+            </figcaption>
+          </figure>
+          <div class="pedal-routing">
+            <div class="dbw-subheading">
+              <div><strong>APP / cabin side</strong><span>uaEFI Molex C-D to B107 pedal</span></div>
+              <em>No bulkhead</em>
+            </div>
+            <div class="pedal-face" aria-label="B107 connector cavity view">
+              <div class="pedal-latch">LATCH</div>
+              <div class="pedal-pins" id="pedal-pins"></div>
+              <span>CONNECTOR FACE &middot; LEFT TO RIGHT 6-1</span>
+            </div>
+            <div class="cabin-route-list" id="cabin-route-list"></div>
+          </div>
+          <figure class="pedal-reference throttle-reference">
+            <a href="DBW_diagram.png" target="_blank" title="Open full-size throttle actuator diagram">
+              <img src="DBW_diagram.png" alt="Eight-pin throttle actuator connector diagram and pin table" />
+            </a>
+            <figcaption>
+              Throttle actuator control &middot; cavities A-H
+            </figcaption>
+          </figure>
+          <div class="throttle-routing">
+            <div class="dbw-subheading">
+              <div><strong>Throttle actuator / engine side</strong><span>Connector cavity to live uaEFI and bulkhead assignment</span></div>
+              <em>Verify polarity</em>
+            </div>
+            <p class="dbw-routing-note">Motor polarity and the paired 5 V / low-reference splices are proposed. Confirm continuity and uaEFI configuration before enabling DBW.</p>
+            <div class="throttle-route-list" id="throttle-route-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <dialog class="editor-dialog" id="editor-dialog">
+      <form method="dialog" id="editor-form">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow" id="dialog-eyebrow">Edit route</p>
+            <h2 id="dialog-title">Circuit details</h2>
+          </div>
+          <button class="icon-button" value="cancel" aria-label="Close editor">&times;</button>
+        </div>
+
+        <input id="circuit-id" type="hidden" />
+        <div class="form-grid">
+          <label class="field field-wide">
+            <span>Circuit name</span>
+            <input id="circuit-name" name="name" required maxlength="80" />
+          </label>
+
+          <label class="field">
+            <span>Category</span>
+            <select id="circuit-category" name="category">
+              <option>Sensor</option>
+              <option>Ignition</option>
+              <option>Injection</option>
+              <option>DBW</option>
+              <option>Power</option>
+              <option>Control</option>
+              <option>Spare</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Bulkhead cavity</span>
+            <select id="circuit-pin" name="bulkheadPin"></select>
+          </label>
+
+          <fieldset class="side-fieldset">
+            <legend>Cabin / uaEFI side</legend>
+            <label class="field">
+              <span>Component</span>
+              <input id="source-component" name="sourceComponent" maxlength="80" />
+            </label>
+            <label class="field">
+              <span>Pin / cavity</span>
+              <input id="source-pin" name="sourcePin" maxlength="40" placeholder="TBD" />
+            </label>
+          </fieldset>
+
+          <fieldset class="side-fieldset">
+            <legend>Engine side</legend>
+            <label class="field">
+              <span>Component</span>
+              <input id="engine-component" name="engineComponent" maxlength="80" />
+            </label>
+            <label class="field">
+              <span>Pin / cavity</span>
+              <input id="engine-pin" name="enginePin" maxlength="40" placeholder="TBD" />
+            </label>
+          </fieldset>
+
+          <label class="field">
+            <span>Planned wire color</span>
+            <div class="color-field">
+              <input id="wire-color" name="color" type="color" />
+              <input id="wire-color-name" name="colorName" maxlength="30" placeholder="e.g. White" />
+            </div>
+          </label>
+
+          <label class="field">
+            <span>Wire gauge</span>
+            <input id="wire-gauge" name="gauge" maxlength="20" placeholder="e.g. 20 AWG" />
+          </label>
+
+          <label class="field field-wide">
+            <span>Notes / verification needed</span>
+            <textarea id="circuit-notes" name="notes" rows="4" maxlength="600"></textarea>
+          </label>
+        </div>
+
+        <div class="status-options">
+          <label><input id="source-verified" type="checkbox" /> uaEFI/source pin verified</label>
+          <label><input id="engine-verified" type="checkbox" /> Engine pin verified</label>
+          <label><input id="circuit-complete" type="checkbox" /> Route checked off</label>
+        </div>
+
+        <div class="dialog-actions">
+          <button class="button button-danger" id="delete-button" type="button">Delete circuit</button>
+          <span class="action-spacer"></span>
+          <button class="button button-ghost" value="cancel" type="button" id="cancel-dialog">Cancel</button>
+          <button class="button button-primary" value="default" type="submit">Save route</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="checklist-dialog" id="checklist-dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Build progress</p>
+          <h2>Harness checklist</h2>
+        </div>
+        <button class="icon-button" id="close-checklist" aria-label="Close checklist">&times;</button>
+      </div>
+      <div class="checklist-progress" id="checklist-progress"></div>
+      <div class="checklist-list" id="checklist-list"></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
